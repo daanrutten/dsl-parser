@@ -6,6 +6,10 @@
     "build": "tsc"
   },
   "main": "dist/index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daanrutten/dsl-parser.git"
+  },
   "keywords": [
     "parser",
     "bottom-up",
@@ -15,6 +19,10 @@
   ],
   "author": "Daan Rutten",
   "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/daanrutten/dsl-parser/issues"
+  },
+  "homepage": "https://github.com/daanrutten/dsl-parser#readme",
   "dependencies": {
     "deep-equal": "^1.0.1"
   },

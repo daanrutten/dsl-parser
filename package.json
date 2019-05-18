@@ -1,0 +1,27 @@
+{
+  "name": "dsl-parser",
+  "version": "0.0.1",
+  "description": "A simple lexer and bottom-up parser for creating domain specific languages",
+  "scripts": {
+    "build": "tsc"
+  },
+  "main": "dist/index.js",
+  "keywords": [
+    "parser",
+    "bottom-up",
+    "domain",
+    "specific",
+    "language"
+  ],
+  "author": "Daan Rutten",
+  "license": "ISC",
+  "dependencies": {
+    "deep-equal": "^1.0.1"
+  },
+  "devDependencies": {
+    "@types/deep-equal": "^1.0.1",
+    "@types/node": "^12.0.0",
+    "tslint": "^5.16.0",
+    "typescript": "^3.4.5"
+  }
+}

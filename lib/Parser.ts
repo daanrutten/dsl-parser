@@ -230,30 +230,28 @@ export class Parser {
             }
 
             // Get action given current state and symbol
-            let action = this.actionTable[stateStack[0]][token.type];
+            let action = this.actionTable[stateStack[stateStack.length - 1]][token.type];
 
             if (action) {
                 switch (action.type) {
                     case "shift":
-                        symbolStack.splice(0, 0, token);
-                        stateStack.splice(0, 0, action.goto);
+                        symbolStack.push(token);
+                        stateStack.push(action.goto);
 
                         index += token.match[0].length;
                         break;
 
                     case "reduce":
-                        const parent = { type: action.rule, children: symbolStack.slice(0, action.children).reverse() };
+                        const parent = { type: action.rule, children: symbolStack.splice(-action.children) };
+                        stateStack.splice(-action.children);
 
-                        symbolStack.splice(0, action.children);
-                        stateStack.splice(0, action.children);
-
-                        action = this.actionTable[stateStack[0]][parent.type] as { type: "shift", goto: number };
-                        symbolStack.splice(0, 0, parent);
-                        stateStack.splice(0, 0, action.goto);
+                        action = this.actionTable[stateStack[stateStack.length - 1]][parent.type] as { type: "shift", goto: number };
+                        symbolStack.push(parent);
+                        stateStack.push(action.goto);
                         break;
 
                     case "accept":
-                        return { type: action.start, children: symbolStack.reverse() };
+                        return { type: action.start, children: symbolStack };
                 }
             } else {
                 throw Error("Parser failed to parse symbol at " + index);

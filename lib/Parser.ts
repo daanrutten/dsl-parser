@@ -8,23 +8,60 @@ export interface RuleSet { [key: string]: Rule[]; }
 export interface ParseTree { type: string; children: (ParseTree | LexTree)[]; }
 
 interface DottedRule { key: string; children: Rule; dot: number; }
-interface Map<T> { [key: string]: T; }
-
-type Action = { type: "shift", goto: number }
-    | { type: "reduce", rule: string, children: number }
-    | { type: "accept", start: string };
+type Action = { type: "shift", goto: number, cameFrom: number[] }
+    | { type: "reduce", key: string, rule: number }
+    | { type: "accept", key: string };
 
 export class Parser {
+    // Returns the base of an element
+    private static base(el: string): string {
+        switch (el && el[el.length - 1]) {
+            case "+":
+            case "*":
+            case "?":
+                return el.slice(0, -1);
+
+            default:
+                return el;
+        }
+    }
+
+    // Returns true if an element can be omitted
+    private static canOmit(el: string): boolean {
+        switch (el && el[el.length - 1]) {
+            case "*":
+            case "?":
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    // Returns true if an element can be repeated
+    private static canRepeat(el: string): boolean {
+        switch (el && el[el.length - 1]) {
+            case "+":
+            case "*":
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
     // Finds the terminals an element can start with
-    private static first(rules: RuleSet): Map<Set<string>> {
-        const first: Map<Set<string>> = {};
+    private static first(rules: RuleSet): Record<string, Set<string>> {
+        const first: Record<string, Set<string>> = {};
 
         // Initialize elements
         for (const key in rules) {
             first[key] = new Set();
 
             for (const rule of rules[key]) {
-                for (const el of rule) {
+                for (let el of rule) {
+                    el = this.base(el);
+
                     // Terminals have themselves as first
                     first[el] = first[el] || new Set([el]);
                 }
@@ -42,7 +79,13 @@ export class Parser {
 
                 for (const rule of rules[key]) {
                     // Add the first elements of the first child
-                    first[key] = new Set([...first[key], ...first[rule[0]]]);
+                    for (const el of rule) {
+                        first[key] = new Set([...first[key], ...first[this.base(el)]]);
+
+                        if (!this.canOmit(el)) {
+                            break;
+                        }
+                    }
                 }
 
                 changed = changed || first[key].size > prevSize;
@@ -53,8 +96,8 @@ export class Parser {
     }
 
     // Find the terminals which can follow an element
-    private static follow(rules: RuleSet, start: string): Map<Set<string>> {
-        const follow: Map<Set<string>> = {};
+    private static follow(rules: RuleSet, start: string): Record<string, Set<string>> {
+        const follow: Record<string, Set<string>> = {};
 
         // Initialize non-terminals
         for (const key in rules) {
@@ -74,19 +117,27 @@ export class Parser {
             for (const key in rules) {
                 for (const rule of rules[key]) {
                     for (let i = 0; i < rule.length; i++) {
-                        // If element is a non-terminal
-                        if (rule[i] in rules) {
-                            const prevSize = follow[rule[i]].size;
+                        const el = this.base(rule[i]);
 
-                            if (i === rule.length - 1) {
-                                // Follow adds terminals following key
-                                follow[rule[i]] = new Set([...follow[rule[i]], ...follow[key]]);
-                            } else {
-                                // Follow adds first of next element
-                                follow[rule[i]] = new Set([...follow[rule[i]], ...first[rule[i + 1]]]);
+                        // If element is a non-terminal
+                        if (el in rules) {
+                            const prevSize = follow[el].size;
+
+                            for (let j = i + 1; j <= rule.length; j++) {
+                                if (j === rule.length) {
+                                    // Follow adds terminals following key
+                                    follow[el] = new Set([...follow[el], ...follow[key]]);
+                                } else {
+                                    // Follow adds first of next element
+                                    follow[el] = new Set([...follow[el], ...first[this.base(rule[j])]]);
+
+                                    if (!this.canOmit(rule[j])) {
+                                        break;
+                                    }
+                                }
                             }
 
-                            changed = changed || follow[rule[i]].size > prevSize;
+                            changed = changed || follow[el].size > prevSize;
                         }
                     }
                 }
@@ -101,13 +152,26 @@ export class Parser {
         const ruleSet = [root];
 
         for (const rule of ruleSet) {
-            // Get the non-terminal following the dot
-            const nt = rule.children[rule.dot];
+            for (let i = rule.dot; i < rule.children.length; i++) {
+                // Get the non-terminal following the dot
+                const nt = this.base(rule.children[i]);
 
-            if (nt in rules) {
-                // Add each of its rules to the set
-                for (const children of rules[nt]) {
-                    const nextRule = { key: nt, children, dot: 0 };
+                if (nt in rules) {
+                    // Add each of its rules to the set
+                    for (const children of rules[nt]) {
+                        const nextRule = { key: nt, children, dot: 0 };
+
+                        if (!ruleSet.find(r => deepEqual(r, nextRule))) {
+                            ruleSet.push(nextRule);
+                        }
+                    }
+                }
+
+                if (!this.canOmit(rule.children[i])) {
+                    break;
+                } else {
+                    // Advance the dot
+                    const nextRule = { key: rule.key, children: rule.children, dot: i + 1 };
 
                     if (!ruleSet.find(r => deepEqual(r, nextRule))) {
                         ruleSet.push(nextRule);
@@ -120,36 +184,55 @@ export class Parser {
     }
 
     // Advances the dot after recognizing el
-    private static goto(rules: RuleSet, ruleSet: DottedRule[], el: string): DottedRule[] {
+    private static goto(rules: RuleSet, ruleSet: DottedRule[], el: string): [DottedRule[], number[]] {
         const output: DottedRule[] = [];
+        const cameFrom: number[] = [];
 
-        for (const rule of ruleSet) {
+        for (let i = 0; i < ruleSet.length; i++) {
+            const rule = ruleSet[i];
+
             // If rule recognizes el
-            if (rule.children[rule.dot] === el) {
-                // Advance the dot and add closure
-                for (const nextRule of this.closure(rules, { key: rule.key, children: rule.children, dot: rule.dot + 1 })) {
-                    if (!output.find(r => deepEqual(r, nextRule))) {
-                        output.push(nextRule);
+            if (this.base(rule.children[rule.dot]) === el) {
+                for (let j = 1; j >= 0; j--) {
+                    // Advance the dot and add closure
+                    for (const nextRule of this.closure(rules, { key: rule.key, children: rule.children, dot: rule.dot + j })) {
+                        const ruleIndex = output.findIndex(r => deepEqual(r, nextRule));
+
+                        if (ruleIndex === -1) {
+                            if (nextRule.dot > 0) {
+                                cameFrom[output.length] = i;
+                            }
+
+                            output.push(nextRule);
+                        } else if (nextRule.dot > 0 && cameFrom[ruleIndex] !== i) {
+                            throw new Error(`Rule ${rule.key} - ${rule.children} is part of a reduce/reduce conflict`);
+                        }
+                    }
+
+                    if (!this.canRepeat(rule.children[rule.dot])) {
+                        break;
                     }
                 }
             }
         }
 
-        return output;
+        return [output, cameFrom];
     }
 
     // Builds the action table guiding the parser
-    private static buildTable(rules: RuleSet, start: string): Map<Action>[] {
+    private static buildTable(rules: RuleSet, start: string): Record<string, Action>[] {
         // Initialize states with start
         const states = [this.closure(rules, { key: start, children: [start], dot: 0 })];
         const follow = this.follow(rules, start);
 
-        const actionTable: Map<Action>[] = [];
+        const actionTable: Record<string, Action>[] = [];
 
         for (let i = 0; i < states.length; i++) {
             actionTable[i] = {};
 
-            for (const rule of states[i]) {
+            for (let j = 0; j < states[i].length; j++) {
+                const rule = states[i][j];
+
                 // If dot is at end of line
                 if (rule.dot === rule.children.length) {
                     if (rule.key === start) {
@@ -158,12 +241,12 @@ export class Parser {
                             throw new Error(`Rule ${rule.key} - ${rule.children} is part of a ${actionTable[i]["$"].type}/reduce conflict`);
                         } else {
                             // Accept action
-                            actionTable[i]["$"] = { type: "accept", start };
+                            actionTable[i]["$"] = { type: "accept", key: start };
                         }
                     } else {
                         // Reduce if el is a possible follow
                         for (const el of follow[rule.key]) {
-                            const action: Action = { type: "reduce", rule: rule.key, children: rule.children.length };
+                            const action: Action = { type: "reduce", key: rule.key, rule: j };
 
                             if (el in actionTable[i]) {
                                 // Throw error for double entries
@@ -175,15 +258,15 @@ export class Parser {
                         }
                     }
                 } else {
-                    const el = rule.children[rule.dot];
+                    const el = this.base(rule.children[rule.dot]);
 
                     if (el in actionTable[i]) {
-                        // Throw error for double entry
+                        // Throw error for double entries
                         if (actionTable[i][el].type !== "shift") {
                             throw new Error(`Rule ${rule.key} - ${rule.children} is part of a shift/${actionTable[i][el].type} conflict`);
                         }
                     } else {
-                        const gotoState = this.goto(rules, states[i], el);
+                        const [gotoState, cameFrom] = this.goto(rules, states[i], el);
 
                         // Check if state is already in states
                         let gotoStateIndex = states.findIndex(state => deepEqual(state, gotoState));
@@ -194,7 +277,7 @@ export class Parser {
                         }
 
                         // Shift action
-                        actionTable[i][el] = { type: "shift", goto: gotoStateIndex };
+                        actionTable[i][el] = { type: "shift", goto: gotoStateIndex, cameFrom };
                     }
                 }
             }
@@ -203,7 +286,7 @@ export class Parser {
         return actionTable;
     }
 
-    private actionTable: Map<Action>[];
+    private actionTable: Record<string, Action>[];
 
     constructor(private lexer: Lexer, rules: RuleSet, start: string) {
         for (const key in rules) {
@@ -216,6 +299,7 @@ export class Parser {
 
     public parse(input: string, index = 0): ParseTree {
         const symbolStack: (ParseTree | LexTree)[] = [];
+        const readStack: (number | undefined)[][] = [[]];
         const stateStack = [0];
 
         while (true) {
@@ -236,23 +320,26 @@ export class Parser {
                 switch (action.type) {
                     case "shift":
                         symbolStack.push(token);
-                        stateStack.push(action.goto);
-
                         index += token.match[0].length;
                         break;
 
                     case "reduce":
-                        const parent = { type: action.rule, children: symbolStack.splice(-action.children) };
-                        stateStack.splice(-action.children);
+                        const symbolsRead = readStack[readStack.length - 1][action.rule] as number;
+                        const parent = { type: action.key, children: symbolStack.splice(-symbolsRead) };
+                        readStack.splice(-symbolsRead);
+                        stateStack.splice(-symbolsRead);
 
-                        action = this.actionTable[stateStack[stateStack.length - 1]][parent.type] as { type: "shift", goto: number };
+                        action = this.actionTable[stateStack[stateStack.length - 1]][parent.type] as { type: "shift", goto: number, cameFrom: number[] };
                         symbolStack.push(parent);
-                        stateStack.push(action.goto);
                         break;
 
                     case "accept":
-                        return { type: action.start, children: symbolStack };
+                        return { type: action.key, children: symbolStack };
                 }
+
+                // Increase the number of symbols read for each rule
+                readStack.push(action.cameFrom.map(rule => rule !== undefined ? (readStack[readStack.length - 1][rule] || 0) + 1 : undefined));
+                stateStack.push(action.goto);
             } else {
                 throw Error("Parser failed to parse symbol at " + index);
             }

@@ -74,9 +74,9 @@ class ArithVisitor extends Visitor<number, void> {
 }
 
 const lexer = new Lexer(terminals);
-const parser = new Parser(lexer, rules, "root");
+const parser = new Parser(rules, "root");
 const visitor = new ArithVisitor();
 
-const parseTree = parser.parse("3 + 2 * 1");
-console.log(visitor.visit(undefined, parseTree));
+const parseTree = parser.parse(lexer.lex("3 + 2 * 1"));
+console.log(visitor.visit(undefined, parseTree)); 
 ```

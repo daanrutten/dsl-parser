@@ -1,7 +1,7 @@
 import assert from "assert";
 import deepEqual from "deep-equal";
 
-import { Lexer, LexTree } from "./Lexer";
+import { LexTree } from "./Lexer";
 
 export type Rule = string[];
 export interface RuleSet { [key: string]: Rule[]; }
@@ -122,6 +122,11 @@ export class Parser {
                         // If element is a non-terminal
                         if (el in rules) {
                             const prevSize = follow[el].size;
+
+                            if (this.canRepeat(rule[i])) {
+                                // Follow adds first of current element
+                                follow[el] = new Set([...follow[el], ...first[el]]);
+                            }
 
                             for (let j = i + 1; j <= rule.length; j++) {
                                 if (j === rule.length) {
@@ -288,7 +293,7 @@ export class Parser {
 
     private actionTable: Record<string, Action>[];
 
-    constructor(private lexer: Lexer, rules: RuleSet, start: string) {
+    constructor(rules: RuleSet, start: string) {
         for (const key in rules) {
             assert(rules[key].length > 0, "Each non-terminal should contain at least one rule");
             assert(rules[key].every(rule => rule.length > 0), "Each rule should contain at least one element");
@@ -297,19 +302,17 @@ export class Parser {
         this.actionTable = Parser.buildTable(rules, start);
     }
 
-    public parse(input: string, index = 0): ParseTree {
+    public parse(tokens: LexTree[]): ParseTree {
         const symbolStack: (ParseTree | LexTree)[] = [];
         const readStack: (number | undefined)[][] = [[]];
         const stateStack = [0];
 
-        while (true) {
+        for (let index = 0; true;) {
             // Read next symbol
-            const token = this.lexer.next(input, index);
+            const token = tokens[index];
 
-            if (!token) {
-                throw Error("Lexer failed to recognize symbol at " + index);
-            } else if (token.type === "whitespace") {
-                index += token.match[0].length;
+            if (token.type === "whitespace") {
+                index++;
                 continue;
             }
 
@@ -320,11 +323,11 @@ export class Parser {
                 switch (action.type) {
                     case "shift":
                         symbolStack.push(token);
-                        index += token.match[0].length;
+                        index++;
                         break;
 
                     case "reduce":
-                        const symbolsRead = readStack[readStack.length - 1][action.rule] as number;
+                        const symbolsRead = readStack[readStack.length - 1][action.rule]!;
                         const parent = { type: action.key, children: symbolStack.splice(-symbolsRead) };
                         readStack.splice(-symbolsRead);
                         stateStack.splice(-symbolsRead);
@@ -341,7 +344,7 @@ export class Parser {
                 readStack.push(action.cameFrom.map(rule => rule !== undefined ? (readStack[readStack.length - 1][rule] || 0) + 1 : undefined));
                 stateStack.push(action.goto);
             } else {
-                throw Error("Parser failed to parse symbol at " + index);
+                throw Error(`Parser failed to parse symbol at ${token.line + 1}:${token.index + 1}`);
             }
         }
     }

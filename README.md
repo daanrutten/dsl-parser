@@ -3,7 +3,7 @@ The example below shows a simple domain specific language for arithmetic.
 ```typescript
 import { Lexer, LexTree, Terminal } from "./Lexer";
 import { Parser, ParseTree, RuleSet } from "./Parser";
-import { Visitor } from "./Visitor";
+import { skipOneChild, Visitor } from "./Visitor";
 
 const terminals: Terminal[] = [
     // Terminals are matched by their pattern (in order)
@@ -33,48 +33,42 @@ const rules: RuleSet = {
     ]
 };
 
-class ArithVisitor extends Visitor<number> {
-    public visit_addExpr(tree: ParseTree): number {
-        if (tree.children.length > 1) {
-            // Compute the lhs and rhs
-            const lhs = this.visit(tree.children[0]);
-            const rhs = this.visit(tree.children[2]);
+class ArithVisitor extends Visitor<number, void> {
+    @skipOneChild
+    public visit_addExpr(state: void, tree: ParseTree): number {
+        // Compute the lhs and rhs
+        const lhs = this.visit(state, tree.children[0]);
+        const rhs = this.visit(state, tree.children[2]);
 
-            switch ((tree.children[1] as LexTree).match[0]) {
-                case "+":
-                    return lhs + rhs;
+        switch ((tree.children[1] as LexTree).match[0]) {
+            case "+":
+                return lhs + rhs;
 
-                case "-":
-                    return lhs - rhs;
-            }
-
-            throw new Error("Unreachable");
-        } else {
-            return this.visit(tree.children[0]);
+            case "-":
+                return lhs - rhs;
         }
+
+        throw new Error("Unreachable");
     }
 
-    public visit_mulExpr(tree: ParseTree): number {
-        if (tree.children.length > 1) {
-            // Compute the lhs and rhs
-            const lhs = this.visit(tree.children[0]);
-            const rhs = this.visit(tree.children[2]);
+    @skipOneChild
+    public visit_mulExpr(state: void, tree: ParseTree): number {
+        // Compute the lhs and rhs
+        const lhs = this.visit(state, tree.children[0]);
+        const rhs = this.visit(state, tree.children[tree.children.length - 1]);
 
-            switch ((tree.children[1] as LexTree).match[0]) {
-                case "*":
-                    return lhs * rhs;
+        switch ((tree.children[1] as LexTree).match[0]) {
+            case "*":
+                return lhs * rhs;
 
-                case "/":
-                    return lhs / rhs;
-            }
-
-            throw new Error("Unreachable");
-        } else {
-            return this.visit(tree.children[0]);
+            case "/":
+                return lhs / rhs;
         }
+
+        throw new Error("Unreachable");
     }
 
-    public visit_number(tree: LexTree): number {
+    public visit_number(state: void, tree: LexTree): number {
         return parseFloat(tree.match[0]);
     }
 }
@@ -84,5 +78,5 @@ const parser = new Parser(lexer, rules, "root");
 const visitor = new ArithVisitor();
 
 const parseTree = parser.parse("3 + 2 * 1");
-console.log(visitor.visit(parseTree));
+console.log(visitor.visit(undefined, parseTree));
 ```

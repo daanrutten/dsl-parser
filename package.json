@@ -25,7 +25,8 @@
   },
   "homepage": "https://github.com/daanrutten/dsl-parser#readme",
   "dependencies": {
-    "deep-equal": "^1.0.1"
+    "deep-equal": "^1.0.1",
+    "reflect-metadata": "^0.1.13"
   },
   "devDependencies": {
     "@types/deep-equal": "^1.0.1",

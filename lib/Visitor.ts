@@ -1,3 +1,5 @@
+import "reflect-metadata";
+
 import { LexTree } from "./Lexer";
 import { ParseTree } from "./Parser";
 

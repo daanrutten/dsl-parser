@@ -1,7 +1,7 @@
 import assert from "assert";
 import deepEqual from "deep-equal";
 
-import { LexTree } from "./Lexer";
+import { LexTree, Terminal } from "./Lexer";
 
 export type Rule = string[];
 export interface RuleSet { [key: string]: Rule[]; }
@@ -13,6 +13,28 @@ type Action = { type: "shift", goto: number, cameFrom: number[] }
     | { type: "accept", key: string };
 
 export class Parser {
+    // Extracts the terminals from a ruleset
+    public static terminals(rules: RuleSet): Terminal[] {
+        const terminalSet = new Set<string>();
+        const terminals: Terminal[] = [];
+
+        for (const key in rules) {
+            for (const rule of rules[key]) {
+                for (let el of rule) {
+                    el = this.base(el);
+
+                    // If a terminal does not exist, create it
+                    if (!(el in rules) && !terminalSet.has(el)) {
+                        terminals.push({ type: el, pattern: new RegExp(el.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")) });
+                        terminalSet.add(el);
+                    }
+                }
+            }
+        }
+
+        return terminals;
+    }
+
     // Returns the base of an element
     private static base(el: string): string {
         switch (el && el[el.length - 1]) {

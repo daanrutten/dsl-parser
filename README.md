@@ -77,6 +77,6 @@ const lexer = new Lexer(terminals);
 const parser = new Parser(rules, "root");
 const visitor = new ArithVisitor();
 
-const parseTree = parser.parse(lexer.lex("3 + 2 * 1"));
+const parseTree = parser.parse(lexer, Lexer.split("3 + 2 * 1"));
 console.log(visitor.visit(undefined, parseTree)); 
 ```

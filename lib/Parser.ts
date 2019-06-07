@@ -1,7 +1,7 @@
 import assert from "assert";
 import deepEqual from "deep-equal";
 
-import { LexTree, Terminal } from "./Lexer";
+import { Lexer, LexTree, LexTreeUnknown, Terminal } from "./Lexer";
 
 export type Rule = string[];
 export interface RuleSet { [key: string]: Rule[]; }
@@ -324,17 +324,39 @@ export class Parser {
         this.actionTable = Parser.buildTable(rules, start);
     }
 
-    public parse(tokens: LexTree[]): ParseTree {
+    public parse(lexer: Lexer, tokens: LexTree[]): ParseTree {
         const symbolStack: (ParseTree | LexTree)[] = [];
         const readStack: (number | undefined)[][] = [[]];
         const stateStack = [0];
 
-        for (let index = 0; true;) {
-            // Read next symbol
-            const token = tokens[index];
+        let lexToken: LexTree | undefined;
+        let index = 0;
 
+        for (let i = 0; true;) {
+            // Read next symbol
+            let token = lexToken || tokens[i];
+
+            // Lex next token
+            if (!lexToken && token.type === "unknown") {
+                lexToken = lexer.next(token as LexTreeUnknown, index, this.actionTable[stateStack[stateStack.length - 1]]);
+
+                if (!lexToken) {
+                    throw Error(`Lexer failed to recognize symbol at ${token.line + 1}:${token.index + index + 1}`);
+                } else if (lexToken.type === "$") {
+                    i++;
+                    lexToken = undefined;
+                    index = 0;
+                    continue;
+                }
+
+                index += lexToken.match[0].length;
+                token = lexToken;
+            }
+
+            // Skip over whitespace
             if (token.type === "whitespace") {
-                index++;
+                i = !lexToken ? i + 1 : i;
+                lexToken = undefined;
                 continue;
             }
 
@@ -345,7 +367,8 @@ export class Parser {
                 switch (action.type) {
                     case "shift":
                         symbolStack.push(token);
-                        index++;
+                        i = !lexToken ? i + 1 : i;
+                        lexToken = undefined;
                         break;
 
                     case "reduce":

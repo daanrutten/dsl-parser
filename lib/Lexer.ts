@@ -2,55 +2,26 @@ import assert from "assert";
 
 export interface Terminal { type: string; pattern: RegExp; }
 export interface LexTree { type: string; match: RegExpMatchArray; index: number; line: number; }
+export interface LexTreeUnknown extends LexTree { type: "unknown"; }
 
 export class Lexer {
-    constructor(private terminals: Terminal[]) {
-        assert(!terminals.some(t => t.type === "$"), "The terminal type '$' is a reserved keyword");
-        this.terminals = terminals.map(t => (t.pattern = new RegExp(t.pattern.source, "y"), t));
+    // Split the input in lines
+    public static split(input: string): LexTree[] {
+        const lines = input.split(/\r?\n/);
+
+        // Tokens are still unknown
+        const output = lines.map((str, line) => ({ type: "unknown", match: [str], index: 0, line }));
+        output.push({ type: "$", match: [""], index: lines[lines.length - 1].length, line: lines.length - 1 });
+
+        return output;
     }
 
-    // Extract the next symbol from the input
-    public next(input: string, index = 0, line = 0): LexTree | undefined {
-        if (index >= input.length) {
-            return { type: "$", match: [""], index: input.length, line };
-        }
-
-        for (const terminal of this.terminals) {
-            terminal.pattern.lastIndex = index;
-            const match = input.match(terminal.pattern);
-
-            if (match) {
-                return { type: terminal.type, match, index, line };
-            }
-        }
-    }
-
-    // Extract all symbols from the input
-    public lex(input: string, index = 0, line = 0): LexTree[] {
-        const output: LexTree[] = [];
-
-        while (true) {
-            const token = this.next(input, index, line);
-
-            if (!token) {
-                throw Error(`Lexer failed to recognize symbol at ${line + 1}:${index + 1}`);
-            } else if (token.type === "$") {
-                output.push(token);
-                return output;
-            }
-
-            output.push(token);
-            index += token.match[0].length;
-        }
-    }
-
-    // Extract all symbols from the input using the offside rule
-    public lexOffside(input: string): LexTree[] {
+    // Split the input in lines and apply the offside rule
+    public static splitOffside(input: string): LexTree[] {
         const output: LexTree[] = [];
         const level = [0];
 
         const lines = input.split(/\r?\n/);
-        let terminateToken: LexTree | undefined;
 
         for (let i = 0; i < lines.length; i++) {
             const match = lines[i].match(/\S/);
@@ -68,18 +39,65 @@ export class Lexer {
                 }
             }
 
-            // Lex the line
-            const tokens = this.lex(lines[i], 0, i);
-            terminateToken = tokens.pop()!;
-            output.push(...tokens);
+            // Tokens are still unknown
+            output.push({ type: "unknown", match: [lines[i]], index: 0, line: i });
         }
 
         while (0 < level[level.length - 1]) {
-            output.push({ type: "dedent", match: [""], index: terminateToken!.index, line: terminateToken!.line });
+            output.push({ type: "dedent", match: [""], index: lines[lines.length - 1].length, line: lines.length - 1 });
             level.pop();
         }
 
-        output.push(terminateToken!);
+        output.push({ type: "$", match: [""], index: lines[lines.length - 1].length, line: lines.length - 1 });
+        return output;
+    }
+
+    constructor(private terminals: Terminal[]) {
+        assert(!terminals.some(t => t.type === "$"), "The terminal type '$' is a reserved keyword");
+        this.terminals = terminals.map(t => (t.pattern = new RegExp(t.pattern.source, "y"), t));
+    }
+
+    // Extract the next symbol from an unknown token
+    public next(token: LexTreeUnknown, index = 0, activeTerminals?: Record<string, any>): LexTree | undefined {
+        if (index >= token.match[0].length) {
+            return { type: "$", match: [""], index: token.index + index, line: token.line };
+        }
+
+        for (const terminal of this.terminals) {
+            if (!activeTerminals || activeTerminals[terminal.type] || terminal.type === "whitespace") {
+                terminal.pattern.lastIndex = index;
+                const match = token.match[0].match(terminal.pattern);
+
+                if (match) {
+                    return { type: terminal.type, match, index: token.index + index, line: token.line };
+                }
+            }
+        }
+    }
+
+    // Extract all symbols from a set of unknown tokens
+    public lex(tokens: LexTree[]): LexTree[] {
+        const output = [];
+
+        for (const token of tokens) {
+            if (token.type === "unknown") {
+                for (let index = 0; true;) {
+                    const lexToken = this.next(token as LexTreeUnknown, index);
+
+                    if (!lexToken) {
+                        throw Error(`Lexer failed to recognize symbol at ${token.line + 1}:${token.index + index + 1}`);
+                    } else if (lexToken.type === "$") {
+                        break;
+                    }
+
+                    index += lexToken.match[0].length;
+                    output.push(lexToken);
+                }
+            } else {
+                output.push(token);
+            }
+        }
+
         return output;
     }
 }

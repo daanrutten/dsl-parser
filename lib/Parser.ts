@@ -340,9 +340,7 @@ export class Parser {
             if (!lexToken && token.type === "unknown") {
                 lexToken = lexer.next(token as LexTreeUnknown, index, this.actionTable[stateStack[stateStack.length - 1]]);
 
-                if (!lexToken) {
-                    throw Error(`Lexer failed to recognize symbol at ${token.line + 1}:${token.index + index + 1}`);
-                } else if (lexToken.type === "$") {
+                if (lexToken.type === "$") {
                     i++;
                     lexToken = undefined;
                     index = 0;

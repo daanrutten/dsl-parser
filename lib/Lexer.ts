@@ -36,6 +36,10 @@ export class Lexer {
                         output.push({ type: "dedent", match: [""], index: match.index!, line: i });
                         level.pop();
                     }
+
+                    if (match.index! !== level[level.length - 1]) {
+                        throw Error(`Invalid indentation detected at ${i + 1}:${match.index! + 1}`);
+                    }
                 }
             }
 
@@ -58,7 +62,7 @@ export class Lexer {
     }
 
     // Extract the next symbol from an unknown token
-    public next(token: LexTreeUnknown, index = 0, activeTerminals?: Record<string, any>): LexTree | undefined {
+    public next(token: LexTreeUnknown, index = 0, activeTerminals?: Record<string, any>): LexTree {
         if (index >= token.match[0].length) {
             return { type: "$", match: [""], index: token.index + index, line: token.line };
         }
@@ -73,6 +77,8 @@ export class Lexer {
                 }
             }
         }
+
+        throw Error(`Lexer failed to recognize symbol at ${token.line + 1}:${token.index + index + 1}`);
     }
 
     // Extract all symbols from a set of unknown tokens
@@ -84,9 +90,7 @@ export class Lexer {
                 for (let index = 0; true;) {
                     const lexToken = this.next(token as LexTreeUnknown, index);
 
-                    if (!lexToken) {
-                        throw Error(`Lexer failed to recognize symbol at ${token.line + 1}:${token.index + index + 1}`);
-                    } else if (lexToken.type === "$") {
+                    if (lexToken.type === "$") {
                         break;
                     }
 

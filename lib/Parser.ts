@@ -117,7 +117,7 @@ export class Parser {
         return first;
     }
 
-    // Find the terminals which can follow an element
+    // Finds the terminals which can follow an element
     private static follow(rules: RuleSet, start: string): Record<string, Set<string>> {
         const follow: Record<string, Set<string>> = {};
 
@@ -174,34 +174,37 @@ export class Parser {
         return follow;
     }
 
-    // Expand the non-terminals after the dot recursively
-    private static closure(rules: RuleSet, root: DottedRule): DottedRule[] {
+    // Skips over the ommitable elements after the dot
+    private static skipOmit(root: DottedRule): DottedRule[] {
         const ruleSet = [root];
 
+        for (let i = root.dot; i < root.children.length; i++) {
+            if (!this.canOmit(root.children[i])) {
+                break;
+            } else {
+                // Advance the dot
+                ruleSet.push({ key: root.key, children: root.children, dot: i + 1 });
+            }
+        }
+
+        return ruleSet;
+    }
+
+    // Expands the non-terminals after the dot recursively
+    private static closure(rules: RuleSet, root: DottedRule): DottedRule[] {
+        const ruleSet = this.skipOmit(root);
+
         for (const rule of ruleSet) {
-            for (let i = rule.dot; i < rule.children.length; i++) {
-                // Get the non-terminal following the dot
-                const nt = this.base(rule.children[i]);
+            // Get the non-terminal following the dot
+            const nt = this.base(rule.children[rule.dot]);
 
-                if (nt in rules) {
-                    // Add each of its rules to the set
-                    for (const children of rules[nt]) {
-                        const nextRule = { key: nt, children, dot: 0 };
-
+            if (nt in rules) {
+                // Add each of its rules to the set
+                for (const children of rules[nt]) {
+                    for (const nextRule of this.skipOmit({ key: nt, children, dot: 0 })) {
                         if (!ruleSet.find(r => deepEqual(r, nextRule))) {
                             ruleSet.push(nextRule);
                         }
-                    }
-                }
-
-                if (!this.canOmit(rule.children[i])) {
-                    break;
-                } else {
-                    // Advance the dot
-                    const nextRule = { key: rule.key, children: rule.children, dot: i + 1 };
-
-                    if (!ruleSet.find(r => deepEqual(r, nextRule))) {
-                        ruleSet.push(nextRule);
                     }
                 }
             }
@@ -222,16 +225,20 @@ export class Parser {
             if (this.base(rule.children[rule.dot]) === el) {
                 for (let j = 1; j >= 0; j--) {
                     // Advance the dot and add closure
-                    for (const nextRule of this.closure(rules, { key: rule.key, children: rule.children, dot: rule.dot + j })) {
-                        const ruleIndex = output.findIndex(r => deepEqual(r, nextRule));
+                    for (const omitRule of this.skipOmit({ key: rule.key, children: rule.children, dot: rule.dot + j })) {
+                        let ruleIndex = output.findIndex(r => deepEqual(r, omitRule));
 
                         if (ruleIndex === -1) {
-                            if (nextRule.dot > 0) {
-                                cameFrom[output.length] = i;
-                            }
+                            cameFrom[output.length] = i;
 
-                            output.push(nextRule);
-                        } else if (nextRule.dot > 0 && cameFrom[ruleIndex] !== i) {
+                            for (const nextRule of this.closure(rules, omitRule)) {
+                                ruleIndex = output.findIndex(r => deepEqual(r, nextRule));
+
+                                if (ruleIndex === -1) {
+                                    output.push(nextRule);
+                                }
+                            }
+                        } else if (cameFrom[ruleIndex] !== i) {
                             throw new Error(`Rule ${rule.key} - ${rule.children} is part of a reduce/reduce conflict`);
                         }
                     }

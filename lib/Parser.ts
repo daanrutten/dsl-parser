@@ -14,9 +14,8 @@ type Action = { type: "shift", goto: number, cameFrom: number[] }
 
 export class Parser {
     // Extracts the terminals from a ruleset
-    public static terminals(rules: RuleSet): Terminal[] {
-        const terminalSet = new Set<string>();
-        const terminals: Terminal[] = [];
+    public static terminals(rules: RuleSet, terminals: Terminal[]): Terminal[] {
+        const terminalSet = new Set<string>(terminals.map(t => t.type));
 
         for (const key in rules) {
             for (const rule of rules[key]) {

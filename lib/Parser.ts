@@ -223,21 +223,22 @@ export class Parser {
             // If rule recognizes el
             if (this.base(rule.children[rule.dot]) === el) {
                 for (let j = 1; j >= 0; j--) {
-                    // Advance the dot and add closure
-                    for (const omitRule of this.skipOmit({ key: rule.key, children: rule.children, dot: rule.dot + j })) {
-                        let ruleIndex = output.findIndex(r => deepEqual(r, omitRule));
+                    // Advance the dot
+                    const baseRule = { key: rule.key, children: rule.children, dot: rule.dot + j };
+                    const trackedRules = this.skipOmit(baseRule);
+
+                    // Add closure
+                    for (const nextRule of this.closure(rules, baseRule)) {
+                        const ruleIndex = output.findIndex(r => deepEqual(r, nextRule));
+                        const trackCameFrom = trackedRules.some(r => deepEqual(r, nextRule));
 
                         if (ruleIndex === -1) {
-                            cameFrom[output.length] = i;
-
-                            for (const nextRule of this.closure(rules, omitRule)) {
-                                ruleIndex = output.findIndex(r => deepEqual(r, nextRule));
-
-                                if (ruleIndex === -1) {
-                                    output.push(nextRule);
-                                }
+                            if (trackCameFrom) {
+                                cameFrom[output.length] = i;
                             }
-                        } else if (cameFrom[ruleIndex] !== i) {
+
+                            output.push(nextRule);
+                        } else if ((trackCameFrom && cameFrom[ruleIndex] !== i) || (!trackCameFrom && cameFrom[ruleIndex] !== undefined)) {
                             throw new Error(`Rule ${rule.key} - ${rule.children} is part of a reduce/reduce conflict`);
                         }
                     }

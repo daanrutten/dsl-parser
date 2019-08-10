@@ -1,11 +1,13 @@
 import assert from "assert";
 
+import { ParseError } from "./ParseError";
+
 export interface Terminal { type: string; pattern: RegExp; }
 export interface LexTree { type: string; match: RegExpMatchArray; index: number; line: number; }
 export interface LexTreeUnknown extends LexTree { type: "unknown"; }
 
 export class Lexer {
-    // Split the input in lines
+    /** Split the input in lines */
     public static split(input: string): LexTree[] {
         const lines = input.split(/\r?\n/);
 
@@ -16,7 +18,7 @@ export class Lexer {
         return output;
     }
 
-    // Split the input in lines and apply the offside rule
+    /** Split the input in lines and apply the offside rule */
     public static splitOffside(input: string): LexTree[] {
         const output: LexTree[] = [];
         const level = [0];
@@ -38,7 +40,7 @@ export class Lexer {
                     }
 
                     if (match.index! !== level[level.length - 1]) {
-                        throw Error(`Invalid indentation detected at ${i + 1}:${match.index! + 1}`);
+                        throw new ParseError("Invalid indentation detected", i, match.index!);
                     }
                 }
             }
@@ -61,7 +63,7 @@ export class Lexer {
         this.terminals = terminals.map(t => (t.pattern = new RegExp(t.pattern.source, "y"), t));
     }
 
-    // Extract the next symbol from an unknown token
+    /** Extract the next symbol from an unknown token */
     public next(token: LexTreeUnknown, index = 0, activeTerminals?: Record<string, any>): LexTree {
         if (index >= token.match[0].length) {
             return { type: "$", match: [""], index: token.index + index, line: token.line };
@@ -78,10 +80,10 @@ export class Lexer {
             }
         }
 
-        throw Error(`Lexer failed to recognize symbol at ${token.line + 1}:${token.index + index + 1}`);
+        throw new ParseError("Lexer failed to recognize symbol", token.line, token.index + index);
     }
 
-    // Extract all symbols from a set of unknown tokens
+    /** Extract all symbols from a set of unknown tokens */
     public lex(tokens: LexTree[]): LexTree[] {
         const output = [];
 

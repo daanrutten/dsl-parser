@@ -2,6 +2,7 @@ import assert from "assert";
 import deepEqual from "deep-equal";
 
 import { Lexer, LexTree, LexTreeUnknown, Terminal } from "./Lexer";
+import { ParseError } from "./ParseError";
 
 export type Rule = string[];
 export interface RuleSet { [key: string]: Rule[]; }
@@ -13,7 +14,7 @@ type Action = { type: "shift", goto: number, cameFrom: number[] }
     | { type: "accept", key: string };
 
 export class Parser {
-    // Extracts the terminals from a ruleset
+    /** Extracts the terminals from a ruleset */
     public static terminals(rules: RuleSet, terminals: Terminal[]): Terminal[] {
         const terminalSet = new Set<string>(terminals.map(t => t.type));
 
@@ -34,7 +35,7 @@ export class Parser {
         return terminals;
     }
 
-    // Returns the base of an element
+    /** Returns the base of an element */
     private static base(el: string): string {
         switch (el && el[el.length - 1]) {
             case "+":
@@ -47,7 +48,7 @@ export class Parser {
         }
     }
 
-    // Returns true if an element can be omitted
+    /** Returns true if an element can be omitted */
     private static canOmit(el: string): boolean {
         switch (el && el[el.length - 1]) {
             case "*":
@@ -59,7 +60,7 @@ export class Parser {
         }
     }
 
-    // Returns true if an element can be repeated
+    /** Returns true if an element can be repeated */
     private static canRepeat(el: string): boolean {
         switch (el && el[el.length - 1]) {
             case "+":
@@ -71,7 +72,7 @@ export class Parser {
         }
     }
 
-    // Finds the terminals an element can start with
+    /** Finds the terminals an element can start with */
     private static first(rules: RuleSet): Record<string, Set<string>> {
         const first: Record<string, Set<string>> = {};
 
@@ -116,7 +117,7 @@ export class Parser {
         return first;
     }
 
-    // Finds the terminals which can follow an element
+    /** Finds the terminals which can follow an element */
     private static follow(rules: RuleSet, start: string): Record<string, Set<string>> {
         const follow: Record<string, Set<string>> = {};
 
@@ -173,7 +174,7 @@ export class Parser {
         return follow;
     }
 
-    // Skips over the ommitable elements after the dot
+    /** Skips over the ommitable elements after the dot */
     private static skipOmit(root: DottedRule): DottedRule[] {
         const ruleSet = [root];
 
@@ -189,7 +190,7 @@ export class Parser {
         return ruleSet;
     }
 
-    // Expands the non-terminals after the dot recursively
+    /** Expands the non-terminals after the dot recursively */
     private static closure(rules: RuleSet, root: DottedRule): DottedRule[] {
         const ruleSet = this.skipOmit(root);
 
@@ -212,7 +213,7 @@ export class Parser {
         return ruleSet;
     }
 
-    // Advances the dot after recognizing el
+    /** Advances the dot after recognizing el */
     private static goto(rules: RuleSet, ruleSet: DottedRule[], el: string): [DottedRule[], number[]] {
         const output: DottedRule[] = [];
         const cameFrom: number[] = [];
@@ -253,7 +254,7 @@ export class Parser {
         return [output, cameFrom];
     }
 
-    // Builds the action table guiding the parser
+    /** Builds the action table guiding the parser */
     private static buildTable(rules: RuleSet, start: string): Record<string, Action>[] {
         // Initialize states with start
         const states = [this.closure(rules, { key: start, children: [start], dot: 0 })];
@@ -331,6 +332,7 @@ export class Parser {
         this.actionTable = Parser.buildTable(rules, start);
     }
 
+    /** Parses the tokens possibly using the lexer to lex unknown tokens */
     public parse(lexer: Lexer, tokens: LexTree[]): ParseTree {
         const symbolStack: (ParseTree | LexTree)[] = [];
         const readStack: (number | undefined)[][] = [[]];
@@ -394,7 +396,7 @@ export class Parser {
                 readStack.push(action.cameFrom.map(rule => rule !== undefined ? (readStack[readStack.length - 1][rule] || 0) + 1 : undefined));
                 stateStack.push(action.goto);
             } else {
-                throw Error(`Parser failed to parse symbol at ${token.line + 1}:${token.index + 1}`);
+                throw ParseError.fromTree("Parser failed to parse symbol", token);
             }
         }
     }

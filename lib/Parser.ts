@@ -17,6 +17,7 @@ export class Parser {
     /** Extracts the terminals from a ruleset */
     public static terminals(rules: RuleSet, terminals: Terminal[]): Terminal[] {
         const terminalSet = new Set<string>(terminals.map(t => t.type));
+        const ruleTerminals: Terminal[] = [];
 
         for (const key in rules) {
             for (const rule of rules[key]) {
@@ -25,14 +26,15 @@ export class Parser {
 
                     // If a terminal does not exist, create it
                     if (!(el in rules) && !terminalSet.has(el)) {
-                        terminals.push({ type: el, pattern: new RegExp(el.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")) });
+                        ruleTerminals.push({ type: el, pattern: new RegExp(el.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")) });
                         terminalSet.add(el);
                     }
                 }
             }
         }
 
-        return terminals;
+        ruleTerminals.push(...terminals);
+        return ruleTerminals;
     }
 
     /** Returns the base of an element */

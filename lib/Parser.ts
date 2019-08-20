@@ -6,7 +6,7 @@ import { ParseError } from "./ParseError";
 
 export type Rule = string[];
 export interface RuleSet { [key: string]: Rule[]; }
-export interface ParseTree { type: string; children: (ParseTree | LexTree)[]; }
+export interface ParseTree { type: string; children: (ParseTree | LexTree)[]; childrenOfType: Record<string, (ParseTree | LexTree)[]>; }
 
 interface DottedRule { key: string; children: Rule; dot: number; }
 type Action = { type: "shift", goto: number, cameFrom: number[] }
@@ -25,7 +25,7 @@ export class Parser {
                     el = this.base(el);
 
                     // If a terminal does not exist, create it
-                    if (!(el in rules) && !terminalSet.has(el)) {
+                    if (!rules.hasOwnProperty(el) && !terminalSet.has(el)) {
                         ruleTerminals.push({ type: el, pattern: new RegExp(el.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")) });
                         terminalSet.add(el);
                     }
@@ -144,7 +144,7 @@ export class Parser {
                         const el = this.base(rule[i]);
 
                         // If element is a non-terminal
-                        if (el in rules) {
+                        if (rules.hasOwnProperty(el)) {
                             const prevSize = follow[el].size;
 
                             if (this.canRepeat(rule[i])) {
@@ -200,7 +200,7 @@ export class Parser {
             // Get the non-terminal following the dot
             const nt = this.base(rule.children[rule.dot]);
 
-            if (nt in rules) {
+            if (rules.hasOwnProperty(nt)) {
                 // Add each of its rules to the set
                 for (const children of rules[nt]) {
                     for (const nextRule of this.skipOmit({ key: nt, children, dot: 0 })) {
@@ -273,7 +273,7 @@ export class Parser {
                 // If dot is at end of line
                 if (rule.dot === rule.children.length) {
                     if (rule.key === start) {
-                        if ("$" in actionTable[i]) {
+                        if (actionTable[i].hasOwnProperty("$")) {
                             // Throw error for double entries
                             throw new Error(`Rule ${rule.key} - ${rule.children} is part of a ${actionTable[i]["$"].type}/reduce conflict`);
                         } else {
@@ -285,7 +285,7 @@ export class Parser {
                         for (const el of follow[rule.key]) {
                             const action: Action = { type: "reduce", key: rule.key, rule: j };
 
-                            if (el in actionTable[i]) {
+                            if (actionTable[i].hasOwnProperty(el)) {
                                 // Throw error for double entries
                                 throw new Error(`Rule ${rule.key} - ${rule.children} is part of a ${actionTable[i][el].type}/reduce conflict`);
                             } else {
@@ -297,7 +297,7 @@ export class Parser {
                 } else {
                     const el = this.base(rule.children[rule.dot]);
 
-                    if (el in actionTable[i]) {
+                    if (actionTable[i].hasOwnProperty(el)) {
                         // Throw error for double entries
                         if (actionTable[i][el].type !== "shift") {
                             throw new Error(`Rule ${rule.key} - ${rule.children} is part of a shift/${actionTable[i][el].type} conflict`);
@@ -321,6 +321,21 @@ export class Parser {
         }
 
         return actionTable;
+    }
+
+    /** Builds a parseTree from the type and its children */
+    private static buildTree(type: string, children: (ParseTree | LexTree)[]): ParseTree {
+        const tree: ParseTree = { type, children, childrenOfType: {} };
+
+        for (const child of children) {
+            if (!tree.childrenOfType.hasOwnProperty(child.type)) {
+                tree.childrenOfType[child.type] = [child];
+            } else {
+                tree.childrenOfType[child.type].push(child);
+            }
+        }
+
+        return tree;
     }
 
     private actionTable: Record<string, Action>[];
@@ -382,7 +397,7 @@ export class Parser {
 
                     case "reduce":
                         const symbolsRead = readStack[readStack.length - 1][action.rule]!;
-                        const parent = { type: action.key, children: symbolStack.splice(-symbolsRead) };
+                        const parent = Parser.buildTree(action.key, symbolStack.splice(-symbolsRead));
                         readStack.splice(-symbolsRead);
                         stateStack.splice(-symbolsRead);
 
@@ -391,7 +406,7 @@ export class Parser {
                         break;
 
                     case "accept":
-                        return { type: action.key, children: symbolStack };
+                        return Parser.buildTree(action.key, symbolStack);
                 }
 
                 // Increase the number of symbols read for each rule

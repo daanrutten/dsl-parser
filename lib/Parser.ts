@@ -6,7 +6,7 @@ import { ParseError } from "./ParseError";
 
 export type Rule = string[];
 export interface RuleSet { [key: string]: Rule[]; }
-export interface ParseTree { type: string; children: (ParseTree | LexTree)[]; childrenOfType: Record<string, (ParseTree | LexTree)[]>; }
+export interface ParseTree { type: string; children: (ParseTree | LexTree)[]; }
 
 interface DottedRule { key: string; children: Rule; dot: number; }
 type Action = { type: "shift", goto: number, cameFrom: number[] }
@@ -323,21 +323,6 @@ export class Parser {
         return actionTable;
     }
 
-    /** Builds a parseTree from the type and its children */
-    private static buildTree(type: string, children: (ParseTree | LexTree)[]): ParseTree {
-        const tree: ParseTree = { type, children, childrenOfType: {} };
-
-        for (const child of children) {
-            if (!tree.childrenOfType.hasOwnProperty(child.type)) {
-                tree.childrenOfType[child.type] = [child];
-            } else {
-                tree.childrenOfType[child.type].push(child);
-            }
-        }
-
-        return tree;
-    }
-
     private actionTable: Record<string, Action>[];
 
     constructor(rules: RuleSet, start: string) {
@@ -397,7 +382,7 @@ export class Parser {
 
                     case "reduce":
                         const symbolsRead = readStack[readStack.length - 1][action.rule]!;
-                        const parent = Parser.buildTree(action.key, symbolStack.splice(-symbolsRead));
+                        const parent = { type: action.key, children: symbolStack.splice(-symbolsRead) };
                         readStack.splice(-symbolsRead);
                         stateStack.splice(-symbolsRead);
 
@@ -406,7 +391,7 @@ export class Parser {
                         break;
 
                     case "accept":
-                        return Parser.buildTree(action.key, symbolStack);
+                        return { type: action.key, children: symbolStack };
                 }
 
                 // Increase the number of symbols read for each rule

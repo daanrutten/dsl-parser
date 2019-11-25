@@ -21,7 +21,7 @@ export function skipOneChild(target: any, key: string, descriptor: PropertyDescr
 export class Visitor<T, S> {
     /** Visit a node in the parse tree */
     public visit(state: S, tree: ParseTree | LexTree, ...args: any[]): T {
-        if ("visit_" + tree.type in this.constructor.prototype) {
+        if ("visit_" + tree.type in this) {
             return (this as any)["visit_" + tree.type](state, tree, ...args);
         } else if ("children" in tree) {
             return this.visitChildren(state, tree, ...args);

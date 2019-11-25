@@ -8,8 +8,8 @@ export interface LexTreeUnknown extends LexTree { type: "unknown"; }
 
 export class Lexer {
     /** Split the input in lines */
-    public static split(input: string): LexTree[] {
-        const lines = input.split(/\r?\n/);
+    public static split(input: string, comment?: RegExp): LexTree[] {
+        const lines = input.split(/\r?\n/).filter(line => !comment || !comment.test(line));
 
         // Tokens are still unknown
         const output = lines.map((str, line) => ({ type: "unknown", match: [str], index: 0, line }));
@@ -19,11 +19,11 @@ export class Lexer {
     }
 
     /** Split the input in lines and apply the offside rule */
-    public static splitOffside(input: string): LexTree[] {
+    public static splitOffside(input: string, comment?: RegExp): LexTree[] {
         const output: LexTree[] = [];
         const level = [0];
 
-        const lines = input.split(/\r?\n/);
+        const lines = input.split(/\r?\n/).filter(line => !comment || !comment.test(line));
 
         for (let i = 0; i < lines.length; i++) {
             const match = lines[i].match(/\S/);

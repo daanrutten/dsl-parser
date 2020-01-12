@@ -60,7 +60,7 @@ export class Lexer {
 
     constructor(private terminals: Terminal[]) {
         assert(!terminals.some(t => t.type === "$"), "The terminal type '$' is a reserved keyword");
-        this.terminals = terminals.map(t => (t.pattern = new RegExp(t.pattern.source, "y"), t));
+        this.terminals = terminals.map(t => (t.pattern = new RegExp(t.pattern.source, t.pattern.ignoreCase ? "iy" : "y"), t));
     }
 
     /** Extract the next symbol from an unknown token */

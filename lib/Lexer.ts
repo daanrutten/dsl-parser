@@ -9,10 +9,10 @@ export interface LexTreeUnknown extends LexTree { type: "unknown"; }
 export class Lexer {
     /** Split the input in lines */
     public static split(input: string, comment?: RegExp): LexTree[] {
-        const lines = input.split(/\r?\n/).filter(line => !comment || !comment.test(line));
+        const lines = input.split(/\r?\n/);
 
         // Tokens are still unknown
-        const output = lines.map((str, line) => ({ type: "unknown", match: [str], index: 0, line }));
+        const output = lines.map((str, line) => ({ type: "unknown", match: [str], index: 0, line })).filter(line => !comment || !comment.test(line.match[0]));
         output.push({ type: "$", match: [""], index: lines[lines.length - 1].length, line: lines.length - 1 });
 
         return output;
@@ -23,9 +23,13 @@ export class Lexer {
         const output: LexTree[] = [];
         const level = [0];
 
-        const lines = input.split(/\r?\n/).filter(line => !comment || !comment.test(line));
+        const lines = input.split(/\r?\n/);
 
         for (let i = 0; i < lines.length; i++) {
+            if (comment && comment.test(lines[i])) {
+                continue;
+            }
+
             const match = lines[i].match(/\S/);
 
             if (match) {

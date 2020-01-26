@@ -3,7 +3,6 @@
   "version": "0.0.16",
   "description": "A simple lexer and bottom-up parser for creating domain specific languages",
   "scripts": {
-    "vscode:prepublish": "npm run build",
     "build": "tsc"
   },
   "main": "dist/index.js",

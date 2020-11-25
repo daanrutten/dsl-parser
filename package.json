@@ -1,6 +1,6 @@
 {
   "name": "dsl-parser",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "A simple lexer and bottom-up parser for creating domain specific languages",
   "scripts": {
     "build": "tsc"

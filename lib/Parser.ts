@@ -1,5 +1,6 @@
 import assert from "assert";
 import deepEqual from "deep-equal";
+import fs from "fs";
 
 import { Lexer, LexTree, LexTreeUnknown, Terminal } from "./Lexer";
 import { ParseError } from "./ParseError";
@@ -325,13 +326,21 @@ export class Parser {
 
     private actionTable: Record<string, Action>[];
 
-    constructor(rules: RuleSet, start: string) {
+    constructor(rules: RuleSet, start: string, version?: string) {
         for (const key in rules) {
             assert(rules[key].length > 0, "Each non-terminal should contain at least one rule");
             assert(rules[key].every(rule => rule.length > 0), "Each rule should contain at least one element");
         }
 
-        this.actionTable = Parser.buildTable(rules, start);
+        if (version && fs.existsSync("dsl-parser_v" + version + ".json")) {
+            this.actionTable = JSON.parse(fs.readFileSync("dsl-parser_v" + version + ".json").toString());
+        } else {
+            this.actionTable = Parser.buildTable(rules, start);
+
+            if (version) {
+                fs.writeFileSync("dsl-parser_v" + version + ".json", JSON.stringify(this.actionTable));
+            }
+        }
     }
 
     /** Parses the tokens possibly using the lexer to lex unknown tokens */

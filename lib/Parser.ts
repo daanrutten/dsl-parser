@@ -1,5 +1,5 @@
 import assert from "assert";
-import deepEqual from "deep-equal";
+import deepEqual from "fast-deep-equal";
 import fs from "fs";
 
 import { Lexer, LexTree, LexTreeUnknown, Terminal } from "./Lexer";
